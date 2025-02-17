@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>现场照片命名打包程序</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 16px;
+            background: #f7f7f7;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 18px;
+            color: #333;
+            text-align: center;
+            margin: 0 0 20px 0;
+        }
+        .preview-box {
+            width: 100%;
+            height: 200px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .preview-box img {
+            max-width: 100%;
+            max-height: 100%;
+            display: none;
+        }
+        .input-box {
+            margin-bottom: 16px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+        }
+        button:disabled {
+            cursor: not-allowed;
+        }
+        #takePhotoBtn {
+            background: #1989fa;
+        }
+        #selectPhotoBtn {
+            background: #07C160;
+        }
+        #downloadBtn {
+            background: #ff9800;
+        }
+        .tip {
+            color: #999;
+            font-size: 14px;
+            text-align: center;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>现场照片命名打包程序</h1>
+        
+        <div class="preview-box">
+            <img id="previewImage" alt="预览">
+        </div>
+
+        <div class="input-box">
+            <input type="text" id="photoName" placeholder="请输入照片名称">
+        </div>
+
+        <input type="file" id="cameraInput" accept="image/*" capture="camera" style="display: none;">
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        <button id="takePhotoBtn">拍照</button>
+        <button id="selectPhotoBtn">从相册选择</button>
+        <button id="downloadBtn" disabled>打包发送</button>
+        
+        <p class="tip" id="tipText"></p>
+    </div>
+
+    <script>
+        const cameraInput = document.getElementById('cameraInput');
+        const fileInput = document.getElementById('fileInput');
+        const previewImage = document.getElementById('previewImage');
+        const photoName = document.getElementById('photoName');
+        const takePhotoBtn = document.getElementById('takePhotoBtn');
+        const selectPhotoBtn = document.getElementById('selectPhotoBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const tipText = document.getElementById('tipText');
+        
+        let currentFile = null;
+
+        // 更新下载按钮状态
+        function updateDownloadButton() {
+            downloadBtn.disabled = !currentFile || !photoName.value.trim();
+        }
+
+        // 监听文件名输入
+        photoName.addEventListener('input', updateDownloadButton);
+
+        // 处理文件选择
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                currentFile = file;
+                previewImage.style.display = 'block';
+                previewImage.src = URL.createObjectURL(file);
+                updateDownloadButton();
+                tipText.textContent = '照片已选择，请输入名称';
+            }
+        }
+
+        // 拍照按钮
+        takePhotoBtn.addEventListener('click', () => {
+            cameraInput.click();
+        });
+
+        // 相册选择按钮
+        selectPhotoBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // 监听文件选择
+        cameraInput.addEventListener('change', handleFileSelect);
+        fileInput.addEventListener('change', handleFileSelect);
+
+        // 下载按钮处理
+        downloadBtn.addEventListener('click', () => {
+            if (!currentFile || !photoName.value.trim()) return;
+
+            const fileName = photoName.value.trim();
+            const extension = currentFile.name.split('.').pop();
+            const newFileName = `${fileName}.${extension}`;
+
+            // 创建下载链接
+            const link = document.createElement('a');
+            link.href = previewImage.src;
+            link.download = newFileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // 重置界面
+            tipText.textContent = '照片已保存！';
+            setTimeout(() => {
+                currentFile = null;
+                photoName.value = '';
+                previewImage.style.display = 'none';
+                previewImage.src = '';
+                cameraInput.value = '';
+                fileInput.value = '';
+                updateDownloadButton();
+                tipText.textContent = '';
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
