@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>现场照片命名打包程序</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -60,8 +61,10 @@
             font-size: 16px;
             margin-bottom: 12px;
             cursor: pointer;
+            color: white;
         }
         button:disabled {
+            opacity: 0.6;
             cursor: not-allowed;
         }
         #takePhotoBtn {
@@ -114,7 +117,19 @@
         
         let currentFile = null;
 
-        // 更新下载按钮状态
+        // 获取当前时间字符串
+        function getTimeString() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+        }
+
+        // 更新按钮状态
         function updateDownloadButton() {
             downloadBtn.disabled = !currentFile || !photoName.value.trim();
         }
@@ -148,34 +163,83 @@
         cameraInput.addEventListener('change', handleFileSelect);
         fileInput.addEventListener('change', handleFileSelect);
 
-        // 下载按钮处理
-        downloadBtn.addEventListener('click', () => {
+        // 读取文件为ArrayBuffer
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(e);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // 打包发送按钮处理
+        downloadBtn.addEventListener('click', async () => {
             if (!currentFile || !photoName.value.trim()) return;
 
-            const fileName = photoName.value.trim();
-            const extension = currentFile.name.split('.').pop();
-            const newFileName = `${fileName}.${extension}`;
+            try {
+                tipText.textContent = '正在处理...';
+                
+                // 创建ZIP文件
+                const zip = new JSZip();
+                
+                // 获取文件内容
+                const fileData = await readFileAsArrayBuffer(currentFile);
+                
+                // 使用用户输入的名称和原始文件扩展名
+                const fileName = photoName.value.trim();
+                const extension = currentFile.name.split('.').pop();
+                const photoFileName = `${fileName}.${extension}`;
+                
+                // 添加文件到ZIP
+                zip.file(photoFileName, fileData);
+                
+                // 生成ZIP文件
+                const zipContent = await zip.generateAsync({type: 'blob'});
+                
+                // 使用时间戳命名ZIP文件
+                const timeString = getTimeString();
+                const zipFileName = `Photos_${timeString}.zip`;
 
-            // 创建下载链接
-            const link = document.createElement('a');
-            link.href = previewImage.src;
-            link.download = newFileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+                // 创建File对象
+                const file = new File([zipContent], zipFileName, {
+                    type: 'application/zip'
+                });
 
-            // 重置界面
-            tipText.textContent = '照片已保存！';
-            setTimeout(() => {
-                currentFile = null;
-                photoName.value = '';
-                previewImage.style.display = 'none';
-                previewImage.src = '';
-                cameraInput.value = '';
-                fileInput.value = '';
-                updateDownloadButton();
-                tipText.textContent = '';
-            }, 2000);
+                // 使用Web Share API分享
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            files: [file],
+                            title: '分享照片',
+                            text: fileName
+                        });
+                        tipText.textContent = '分享成功！';
+                    } catch (err) {
+                        if (err.name !== 'AbortError') {
+                            throw err;
+                        }
+                    }
+                } else {
+                    // 如果不支持Web Share API，尝试使用微信URL Scheme
+                    window.location.href = 'weixin://dl/chat';
+                }
+
+                // 重置界面
+                setTimeout(() => {
+                    currentFile = null;
+                    photoName.value = '';
+                    previewImage.style.display = 'none';
+                    previewImage.src = '';
+                    cameraInput.value = '';
+                    fileInput.value = '';
+                    updateDownloadButton();
+                    tipText.textContent = '';
+                }, 3000);
+            } catch (error) {
+                console.error('Error:', error);
+                tipText.textContent = '处理过程中出现错误，请重试';
+            }
         });
     </script>
 </body>
