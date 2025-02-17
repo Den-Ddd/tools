@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
     <title>现场照片命名打包程序</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -81,6 +82,9 @@
             text-align: center;
             margin: 0;
         }
+        #downloadLink {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -95,117 +99,133 @@
             <input type="text" id="photoName" placeholder="请输入照片名称">
         </div>
 
+        <input type="file" id="cameraInput" accept="image/*" capture="camera" style="display: none;">
+        <input type="file" id="fileInput" accept="image/*" style="display: none;">
         <button id="takePhotoBtn">拍照</button>
         <button id="selectPhotoBtn">从相册选择</button>
         <button id="downloadBtn" disabled>打包发送</button>
+        <a id="downloadLink" download>下载</a>
         
         <p class="tip" id="tipText"></p>
     </div>
 
     <script>
+        const cameraInput = document.getElementById('cameraInput');
+        const fileInput = document.getElementById('fileInput');
         const previewImage = document.getElementById('previewImage');
         const photoName = document.getElementById('photoName');
         const takePhotoBtn = document.getElementById('takePhotoBtn');
         const selectPhotoBtn = document.getElementById('selectPhotoBtn');
         const downloadBtn = document.getElementById('downloadBtn');
+        const downloadLink = document.getElementById('downloadLink');
         const tipText = document.getElementById('tipText');
         
-        let currentImage = null;
+        let currentFile = null;
+
+        // 获取当前时间字符串
+        function getTimeString() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+        }
 
         // 更新按钮状态
         function updateDownloadButton() {
-            downloadBtn.disabled = !currentImage || !photoName.value.trim();
+            downloadBtn.disabled = !currentFile || !photoName.value.trim();
         }
 
         // 监听文件名输入
         photoName.addEventListener('input', updateDownloadButton);
 
+        // 处理文件选择
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                currentFile = file;
+                previewImage.style.display = 'block';
+                previewImage.src = URL.createObjectURL(file);
+                updateDownloadButton();
+                tipText.textContent = '照片已选择，请输入名称';
+            }
+        }
+
         // 拍照按钮
         takePhotoBtn.addEventListener('click', () => {
-            // 使用系统相机
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.capture = 'camera';
-            input.style.display = 'none';
-            
-            input.onchange = function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    currentImage = file;
-                    previewImage.style.display = 'block';
-                    previewImage.src = URL.createObjectURL(file);
-                    updateDownloadButton();
-                    tipText.textContent = '照片已选择，请输入名称';
-                }
-                document.body.removeChild(input);
-            };
-            
-            document.body.appendChild(input);
-            input.click();
+            cameraInput.click();
         });
 
         // 相册选择按钮
         selectPhotoBtn.addEventListener('click', () => {
-            // 使用系统相册
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.style.display = 'none';
-            
-            input.onchange = function(e) {
-                const file = e.target.files[0];
-                if (file) {
-                    currentImage = file;
-                    previewImage.style.display = 'block';
-                    previewImage.src = URL.createObjectURL(file);
-                    updateDownloadButton();
-                    tipText.textContent = '照片已选择，请输入名称';
-                }
-                document.body.removeChild(input);
-            };
-            
-            document.body.appendChild(input);
-            input.click();
+            fileInput.click();
         });
 
+        // 监听文件选择
+        cameraInput.addEventListener('change', handleFileSelect);
+        fileInput.addEventListener('change', handleFileSelect);
+
         // 打包发送按钮处理
-        downloadBtn.addEventListener('click', () => {
-            if (!currentImage || !photoName.value.trim()) return;
+        downloadBtn.addEventListener('click', async () => {
+            if (!currentFile || !photoName.value.trim()) return;
 
             try {
                 tipText.textContent = '正在处理...';
                 
-                // 使用微信的图片预览功能，这样用户可以直接保存或分享
-                const tempUrl = URL.createObjectURL(currentImage);
+                // 创建ZIP文件
+                const zip = new JSZip();
                 
-                // 创建一个临时的图片元素来显示
-                const tempImg = document.createElement('img');
-                tempImg.src = tempUrl;
-                tempImg.style.position = 'fixed';
-                tempImg.style.top = '0';
-                tempImg.style.left = '0';
-                tempImg.style.maxWidth = '100%';
-                tempImg.style.maxHeight = '100%';
-                tempImg.style.zIndex = '9999';
+                // 获取文件内容
+                const fileReader = new FileReader();
+                const fileData = await new Promise((resolve, reject) => {
+                    fileReader.onload = () => resolve(fileReader.result);
+                    fileReader.onerror = reject;
+                    fileReader.readAsArrayBuffer(currentFile);
+                });
                 
-                // 添加点击事件来关闭预览
-                tempImg.onclick = function() {
-                    document.body.removeChild(tempImg);
-                    URL.revokeObjectURL(tempUrl);
-                };
+                // 使用用户输入的名称和原始文件扩展名
+                const fileName = photoName.value.trim();
+                const extension = currentFile.name.split('.').pop();
+                const photoFileName = `${fileName}.${extension}`;
                 
-                document.body.appendChild(tempImg);
+                // 添加文件到ZIP
+                zip.file(photoFileName, fileData);
                 
-                tipText.textContent = '点击图片可以保存或分享';
+                // 生成ZIP文件
+                const zipContent = await zip.generateAsync({type: 'blob'});
                 
+                // 使用时间戳命名ZIP文件
+                const timeString = getTimeString();
+                const zipFileName = `Photos_${timeString}.zip`;
+
+                // 创建下载链接
+                const url = URL.createObjectURL(zipContent);
+                downloadLink.href = url;
+                downloadLink.download = zipFileName;
+                
+                // 模拟点击下载链接
+                downloadLink.click();
+                
+                // 清理URL
+                setTimeout(() => {
+                    URL.revokeObjectURL(url);
+                }, 1000);
+
+                tipText.textContent = '文件已准备好，请点击下载';
+
                 // 重置界面
                 setTimeout(() => {
-                    currentImage = null;
+                    currentFile = null;
                     photoName.value = '';
                     previewImage.style.display = 'none';
                     previewImage.src = '';
+                    cameraInput.value = '';
+                    fileInput.value = '';
                     updateDownloadButton();
+                    tipText.textContent = '';
                 }, 3000);
             } catch (error) {
                 console.error('Error:', error);
